@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-func testSmirit() {
+func main() {
 	// Example usage of the Smriti
 	blockSize := 4096            // 4KB per block
 	maxMemory := 4 * 1024 * 1024 // 4MB total memory limit
