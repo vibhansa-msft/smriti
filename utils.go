@@ -94,8 +94,8 @@ func (sm *Smriti) expand() (int, error) {
 func (sm *Smriti) shrink() (int, error) {
 	// If 80% of allocated blocks are in returnedBlocks channel then we can shrink
 	freeBlocks := len(sm.availableBlocks)
-	if freeBlocks >= sm.initialBlockCount &&
-		freeBlocks >= int(float64(sm.currentAllocatedCount)*ShrinkThreshold) {
+	if freeBlocks > sm.initialBlockCount &&
+		freeBlocks > int(float64(sm.currentAllocatedCount)*ShrinkThreshold) {
 
 		blocksToDeallocate := int(float64(sm.currentAllocatedCount) * ShrinkRatio)
 		if blocksToDeallocate == 0 { // Ensure at least one block is removed if ratio is too small
@@ -103,6 +103,9 @@ func (sm *Smriti) shrink() (int, error) {
 		}
 
 		blocksToDeallocate = min(blocksToDeallocate, sm.currentAllocatedCount)
+		if freeBlocks-blocksToDeallocate < sm.initialBlockCount {
+			blocksToDeallocate = freeBlocks - sm.initialBlockCount
+		}
 
 		return sm.deallocateBlocks(blocksToDeallocate)
 	}

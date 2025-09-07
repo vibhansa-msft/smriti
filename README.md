@@ -19,7 +19,7 @@ Expansion: If 80% of currently allocated blocks are in use, it allocates an addi
 
 #### Shrinking: 
 
-If more than 20% of the maxBlockCount are available (i.e., the system is underutilized) and no blocks have been returned for 20 seconds, it deallocates 10% of the maxBlockCount until the initialBlockCount is reached.
+If more than 50% of the allocated blocks are free (i.e., the memory pool is underutilized) it deallocates 10% of the allocated blocks until the initialBlockCount is reached.
 
 #### Concurrency Safe: 
 
@@ -27,7 +27,7 @@ Uses Go channels (availableBlocks, returnedBlocks) for safe concurrent access to
 
 #### Idle Detection: 
 
-A time.Timer is used to detect prolonged periods of inactivity, triggering the shrinking mechanism.
+A time.Timer is used to detect prolonged periods of inactivity, triggering the shrinking mechanism every 1 minute.
 
 #### Graceful Shutdown: 
 

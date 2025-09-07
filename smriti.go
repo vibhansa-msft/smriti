@@ -35,7 +35,7 @@ type Smriti struct {
 // NewSmriti creates and initializes a new Smriti.
 // It takes the desired block size and maximum total memory size.
 // It returns a pointer to the initialized Smriti or an error if initialization fails.
-func NewSmriti(blockSize, blockCount int) (*Smriti, error) {
+func New(blockSize, blockCount int) (*Smriti, error) {
 	if blockSize <= 0 || blockCount <= 0 {
 		return nil, fmt.Errorf("block size and block count must be non zero")
 	}
@@ -97,6 +97,11 @@ func (sm *Smriti) Close() {
 	}
 	_, _ = sm.deallocateBlocks(len(sm.availableBlocks)) // Deallocate all available blocks
 	sm.currentAllocatedCount = 0                        // Reset count
+	sm.blockSize = 0
+	sm.maxBlockCount = 0
+	sm.initialBlockCount = 0
+	sm.zeroSlice = nil
+	sm.allMappedBlocks = nil
 }
 
 // Stats provides current statistics of the Smriti.
@@ -191,7 +196,6 @@ func (sm *Smriti) handleReturnedBlocks() {
 
 			// Move this block to available blocks for reuse
 			sm.availableBlocks <- block
-			_, _ = sm.shrink()
 			sm.Unlock()
 
 		case <-time.After(1 * time.Minute):
