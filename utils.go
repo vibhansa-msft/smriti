@@ -2,6 +2,7 @@ package smriti
 
 import (
 	"fmt"
+	"time"
 	"unsafe"
 )
 
@@ -87,27 +88,24 @@ func (sm *Smriti) expand() (int, error) {
 	}
 
 	blocksToAllocate = min(blocksToAllocate, sm.maxBlockCount-sm.currentAllocatedCount)
+	sm.lastExpansonTime = time.Now()
 	return sm.allocateBlocks(blocksToAllocate)
 }
 
 // Shrink the blocks if more blocks can be deallocated
 func (sm *Smriti) shrink() (int, error) {
-	// If 80% of allocated blocks are in returnedBlocks channel then we can shrink
+	// If 50% of allocated blocks are free then only we go for shrink
 	freeBlocks := len(sm.availableBlocks)
-	if freeBlocks > sm.initialBlockCount &&
-		freeBlocks > int(float64(sm.currentAllocatedCount)*ShrinkThreshold) {
-
+	if freeBlocks > int(float64(sm.currentAllocatedCount)*ShrinkThreshold) {
 		blocksToDeallocate := int(float64(sm.currentAllocatedCount) * ShrinkRatio)
 		if blocksToDeallocate == 0 { // Ensure at least one block is removed if ratio is too small
 			blocksToDeallocate = 1
 		}
 
-		blocksToDeallocate = min(blocksToDeallocate, sm.currentAllocatedCount)
-		if freeBlocks-blocksToDeallocate < sm.initialBlockCount {
-			blocksToDeallocate = freeBlocks - sm.initialBlockCount
+		blocksToDeallocate = min(blocksToDeallocate, sm.currentAllocatedCount, freeBlocks-sm.initialBlockCount)
+		if blocksToDeallocate > 0 {
+			return sm.deallocateBlocks(blocksToDeallocate)
 		}
-
-		return sm.deallocateBlocks(blocksToDeallocate)
 	}
 
 	return 0, nil

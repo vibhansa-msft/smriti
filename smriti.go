@@ -28,14 +28,16 @@ type Smriti struct {
 
 	sync.Mutex                // Mutex to protect access to currentAllocatedCount and allMappedBlocks
 	wg         sync.WaitGroup // WaitGroup to manage background goroutines
+	done       chan struct{}  // Channel to signal shutdown of background goroutines
 
-	zeroSlice []byte // Slice which holds all 0's of size blockSize
+	zeroSlice        []byte    // Slice which holds all 0's of size blockSize
+	lastExpansonTime time.Time // Timestamp of the last allocation
 }
 
 // NewSmriti creates and initializes a new Smriti.
 // It takes the desired block size and maximum total memory size.
 // It returns a pointer to the initialized Smriti or an error if initialization fails.
-func New(blockSize, blockCount int) (*Smriti, error) {
+func NewSmriti(blockSize, blockCount int) (*Smriti, error) {
 	if blockSize <= 0 || blockCount <= 0 {
 		return nil, fmt.Errorf("block size and block count must be non zero")
 	}
@@ -56,6 +58,8 @@ func New(blockSize, blockCount int) (*Smriti, error) {
 		availableBlocks:       make(chan []byte, blockCount),
 		returnedBlocks:        make(chan []byte, blockCount),
 		allMappedBlocks:       make(map[uintptr][]byte),
+		lastExpansonTime:      time.Now(),
+		done:                  make(chan struct{}),
 	}
 
 	// Perform initial allocation of blocks.
@@ -81,20 +85,28 @@ func New(blockSize, blockCount int) (*Smriti, error) {
 // Close gracefully shuts down the Smriti, unmapping all allocated memory.
 // It signals background goroutines to stop and waits for them to finish.
 func (sm *Smriti) Close() {
+	// Mark shutdown and close the returned block channel
 	sm.Lock()
-	defer sm.Unlock()
-
-	// Mark as closed by closing the channel.
-	close(sm.availableBlocks)
+	close(sm.done)
 	close(sm.returnedBlocks)
+	sm.Unlock()
 
+	// Wait for background goroutines to finish
 	sm.wg.Wait()
 
 	// Drain availableBlocks and returnedBlocks channels to ensure all mmap'd blocks
 	// are accounted for in allMappedBlocks before unmapping.
 	for block := range sm.returnedBlocks {
-		sm.availableBlocks <- block // Push returned blocks back to availableBlocks
+		select {
+		case sm.availableBlocks <- block: // Push returned blocks back to availableBlocks
+		default:
+			// If availableBlocks is full, we can drop the block as it will be unmapped below
+		}
 	}
+
+	// Mark as closed by closing the channel.
+	close(sm.availableBlocks)
+
 	_, _ = sm.deallocateBlocks(len(sm.availableBlocks)) // Deallocate all available blocks
 	sm.currentAllocatedCount = 0                        // Reset count
 	sm.blockSize = 0
@@ -124,6 +136,10 @@ func (sm *Smriti) Allocate() ([]byte, error) {
 // PutBlock returns a memory block from the client to the manager.
 // It attempts to push the block back into the returnedBlocks channel.
 func (sm *Smriti) Free(block []byte) error {
+	if len(block) != sm.blockSize {
+		return fmt.Errorf("block size mismatch: expected %d, got %d", sm.blockSize, len(block))
+	}
+
 	sm.Lock()
 	defer sm.Unlock()
 
@@ -198,10 +214,18 @@ func (sm *Smriti) handleReturnedBlocks() {
 			sm.availableBlocks <- block
 			sm.Unlock()
 
-		case <-time.After(1 * time.Minute):
-			sm.Lock()
-			_, _ = sm.shrink()
-			sm.Unlock()
+		case <-time.After(ShrinkTimeout * time.Second):
+			// If last allocation was just done then we shall not shring the pool
+			// Also, shrink the pool only when we have more than initial blocks available
+			if time.Since(sm.lastExpansonTime) > (ShrinkTimeout*time.Second) &&
+				len(sm.availableBlocks) > sm.initialBlockCount {
+				sm.Lock()
+				_, _ = sm.shrink()
+				sm.Unlock()
+			}
+
+		case <-sm.done:
+			return
 		}
 	}
 }
