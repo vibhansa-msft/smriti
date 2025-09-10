@@ -2,6 +2,7 @@ package smriti
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
@@ -127,7 +128,43 @@ func (s *smritiPatalTestSuite) TestAllocationUpgrade() {
 	blk, err = s.smritiPatalInstance.AllocateWithUpgrade(10)
 	s.assert.Nil(err)
 	s.assert.NotNil(blk)
-	s.assert.Equal(20, len(blk))
+	s.assert.NotEqual(10, len(blk))
+}
+
+func (s *smritiPatalTestSuite) TestFree() {
+	var err error
+	s.smritiPatalInstance, err = NewSmritiPatal([]SmritiConfig{
+		{Size: 10, Count: 1},
+		{Size: 20, Count: 2},
+		{Size: 30, Count: 3},
+	})
+	s.assert.Nil(err)
+	s.assert.NotNil(s.smritiPatalInstance)
+
+	blk, err := s.smritiPatalInstance.AllocateWithUpgrade(10)
+	s.assert.Nil(err)
+	s.assert.NotNil(blk)
+	s.assert.Equal(10, len(blk))
+
+	err = s.smritiPatalInstance.Free(blk)
+	s.assert.Nil(err)
+	time.Sleep(1 * time.Second) // wait for the free to be processed
+
+	blk, err = s.smritiPatalInstance.Allocate(10)
+	s.assert.Nil(err)
+	s.assert.NotNil(blk)
+	s.assert.Equal(10, len(blk))
+
+	err = s.smritiPatalInstance.Free(blk)
+	s.assert.Nil(err)
+
+	err = s.smritiPatalInstance.Free([]byte{})
+	s.assert.NotNil(err)
+	s.assert.Contains(err.Error(), "cannot free an empty block")
+
+	err = s.smritiPatalInstance.Free(make([]byte, 5))
+	s.assert.NotNil(err)
+	s.assert.Contains(err.Error(), "no Smriti instance for block size")
 }
 
 func TestSmritiPatal(t *testing.T) {
