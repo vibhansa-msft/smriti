@@ -46,14 +46,14 @@ func (s *smritiTestSuite) TestInitialAllocations() {
 	s.assert.Nil(err)
 	s.assert.NotNil(s.smritiInstance)
 	s.assert.Equal(1, s.smritiInstance.currentAllocatedCount)
-	s.assert.Equal(1, s.smritiInstance.initialBlockCount)
+	s.assert.Equal(1, s.smritiInstance.initialCount)
 	s.smritiInstance.Close()
 
 	s.smritiInstance, err = NewSmriti(10, 20, 0)
 	s.assert.Nil(err)
 	s.assert.NotNil(s.smritiInstance)
 	s.assert.Equal(4, s.smritiInstance.currentAllocatedCount)
-	s.assert.Equal(4, s.smritiInstance.initialBlockCount)
+	s.assert.Equal(4, s.smritiInstance.initialCount)
 
 	allocated, avilable, pending := s.smritiInstance.Stats()
 	s.assert.Equal(4, allocated)
@@ -67,7 +67,7 @@ func (s *smritiTestSuite) TestExpansion() {
 	s.assert.Nil(err)
 	s.assert.NotNil(s.smritiInstance)
 	s.assert.Equal(2, s.smritiInstance.currentAllocatedCount)
-	s.assert.Equal(2, s.smritiInstance.initialBlockCount)
+	s.assert.Equal(2, s.smritiInstance.initialCount)
 
 	var blocks map[int][]byte = make(map[int][]byte)
 	for i := range 5 {
@@ -78,7 +78,7 @@ func (s *smritiTestSuite) TestExpansion() {
 	}
 
 	s.assert.Equal(5, s.smritiInstance.currentAllocatedCount)
-	s.assert.Equal(2, s.smritiInstance.initialBlockCount)
+	s.assert.Equal(2, s.smritiInstance.initialCount)
 	allocated, avilable, pending := s.smritiInstance.Stats()
 	s.assert.Equal(5, allocated)
 	s.assert.Equal(0, avilable)
@@ -90,7 +90,7 @@ func (s *smritiTestSuite) TestExpansion() {
 	}
 
 	s.assert.Equal(5, s.smritiInstance.currentAllocatedCount)
-	s.assert.Equal(2, s.smritiInstance.initialBlockCount)
+	s.assert.Equal(2, s.smritiInstance.initialCount)
 	time.Sleep(1 * time.Second) // Give some time for the background goroutine to process
 	allocated, avilable, pending = s.smritiInstance.Stats()
 	s.assert.Equal(5, allocated)
@@ -103,7 +103,7 @@ func (s *smritiTestSuite) TestShrink() {
 	s.assert.Nil(err)
 	s.assert.NotNil(s.smritiInstance)
 	s.assert.Equal(2, s.smritiInstance.currentAllocatedCount)
-	s.assert.Equal(2, s.smritiInstance.initialBlockCount)
+	s.assert.Equal(2, s.smritiInstance.initialCount)
 
 	var blocks map[int][]byte = make(map[int][]byte)
 	for i := range 5 {
@@ -114,7 +114,7 @@ func (s *smritiTestSuite) TestShrink() {
 	}
 
 	s.assert.Equal(5, s.smritiInstance.currentAllocatedCount)
-	s.assert.Equal(2, s.smritiInstance.initialBlockCount)
+	s.assert.Equal(2, s.smritiInstance.initialCount)
 	allocated, avilable, pending := s.smritiInstance.Stats()
 	s.assert.Equal(5, allocated)
 	s.assert.Equal(0, avilable)
@@ -126,7 +126,7 @@ func (s *smritiTestSuite) TestShrink() {
 	}
 
 	s.assert.Equal(5, s.smritiInstance.currentAllocatedCount)
-	s.assert.Equal(2, s.smritiInstance.initialBlockCount)
+	s.assert.Equal(2, s.smritiInstance.initialCount)
 
 	time.Sleep((ShrinkTimeout + 10) * time.Second) // Give some time for the background goroutine to process
 	s.assert.Equal(4, s.smritiInstance.currentAllocatedCount)
@@ -138,7 +138,7 @@ func (s *smritiTestSuite) TestAllocFailure() {
 	s.assert.Nil(err)
 	s.assert.NotNil(s.smritiInstance)
 	s.assert.Equal(2, s.smritiInstance.currentAllocatedCount)
-	s.assert.Equal(2, s.smritiInstance.initialBlockCount)
+	s.assert.Equal(2, s.smritiInstance.initialCount)
 
 	var blocks map[int][]byte = make(map[int][]byte)
 	for i := range 10 {
@@ -182,7 +182,7 @@ func (s *smritiTestSuite) TestStats() {
 	s.assert.Nil(err)
 	s.assert.NotNil(s.smritiInstance)
 	s.assert.Equal(4, s.smritiInstance.currentAllocatedCount)
-	s.assert.Equal(4, s.smritiInstance.initialBlockCount)
+	s.assert.Equal(4, s.smritiInstance.initialCount)
 
 	allocated, avilable, pending := s.smritiInstance.Stats()
 	s.assert.Equal(4, allocated)
@@ -205,6 +205,53 @@ func (s *smritiTestSuite) TestStats() {
 	s.assert.Equal(4, allocated)
 	s.assert.Equal(4, avilable)
 	s.assert.Equal(0, pending)
+}
+
+func (s *smritiTestSuite) TestSmritiReservation() {
+	var err error
+	s.smritiInstance, err = NewSmriti(1, 10, 20)
+	s.assert.Nil(err)
+	s.assert.NotNil(s.smritiInstance)
+	s.assert.Equal(4, s.smritiInstance.currentAllocatedCount)
+	s.assert.Equal(4, s.smritiInstance.initialCount)
+	s.assert.Equal(2, s.smritiInstance.reservedCount)
+
+	b, err := s.smritiInstance.AllocateReserved()
+	s.assert.Nil(err)
+	s.assert.NotNil(b)
+	s.assert.Equal(2, len(s.smritiInstance.available))
+	s.assert.Equal(1, len(s.smritiInstance.reserved))
+
+	b2, err := s.smritiInstance.AllocateReserved()
+	s.assert.Nil(err)
+	s.assert.NotNil(b2)
+	s.assert.Equal(2, len(s.smritiInstance.available))
+	s.assert.Equal(0, len(s.smritiInstance.reserved))
+
+	// Next reserved allocation should fallback to regular allocation
+	b3, err := s.smritiInstance.AllocateReserved()
+	s.assert.Nil(err)
+	s.assert.NotNil(b3)
+	s.assert.Equal(1, len(s.smritiInstance.available))
+	s.assert.Equal(0, len(s.smritiInstance.reserved))
+
+	err = s.smritiInstance.Free(b)
+	s.assert.Nil(err)
+	time.Sleep(1 * time.Second) // Give some time for the background goroutine to process
+	s.assert.Equal(1, len(s.smritiInstance.available))
+	s.assert.Equal(1, len(s.smritiInstance.reserved))
+
+	err = s.smritiInstance.Free(b2)
+	s.assert.Nil(err)
+	time.Sleep(1 * time.Second) // Give some time for the background goroutine to process
+	s.assert.Equal(1, len(s.smritiInstance.available))
+	s.assert.Equal(2, len(s.smritiInstance.reserved))
+
+	err = s.smritiInstance.Free(b3)
+	s.assert.Nil(err)
+	time.Sleep(1 * time.Second) // Give some time for the background goroutine to process
+	s.assert.Equal(2, len(s.smritiInstance.available))
+	s.assert.Equal(2, len(s.smritiInstance.reserved))
 }
 
 func TestSmriti(t *testing.T) {

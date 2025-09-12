@@ -15,15 +15,15 @@ Uses syscall.Mmap (Linux) or VirtualAlloc (Windows) to allocate memory directly 
 
 #### Dynamic Scaling:
 
-Expansion: If 80% of currently allocated blocks are in use, it allocates an additional 10% of the maxBlockCount until the maxBlockCount is reached.
+Expansion: If 80% of currently allocated blocks are in use, it allocates an additional 10% of the maxBlocks until the maxBlocks is reached.
 
 #### Shrinking: 
 
-If more than 50% of the allocated blocks are free (i.e., the memory pool is underutilized) it deallocates 10% of the allocated blocks until the initialBlockCount is reached.
+If more than 50% of the allocated blocks are free (i.e., the memory pool is underutilized) it deallocates 10% of the allocated blocks until the initialCount is reached.
 
 #### Concurrency Safe: 
 
-Uses Go channels (availableBlocks, returnedBlocks) for safe concurrent access to blocks and a sync.Mutex to protect shared state (currentAllocatedCount, allMappedBlocks).
+Uses Go channels (available, returned) for safe concurrent access to blocks and a sync.Mutex to protect shared state (currentAllocatedCount, reference).
 
 #### Idle Detection: 
 
@@ -41,4 +41,4 @@ Smriti also support creation of a reserved pool. While creating the new instance
 
 Use SmritiPatal if you wish to create a pool of blocks with different sizes.
 
-GC Avoidance: By storing the []byte slices returned by mmap in the allMappedBlocks map (keyed by their underlying memory address), the Go runtime maintains a reference to these slices, preventing their headers from being garbage collected while the mmap'd memory is still active. This allows explicit munmap calls when blocks are deallocated.
+GC Avoidance: By storing the []byte slices returned by mmap in the reference map (keyed by their underlying memory address), the Go runtime maintains a reference to these slices, preventing their headers from being garbage collected while the mmap'd memory is still active. This allows explicit munmap calls when blocks are deallocated.
