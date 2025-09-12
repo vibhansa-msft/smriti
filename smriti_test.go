@@ -8,10 +8,11 @@ import (
 	"github.com/stretchr/testify/suite"
 )
 
+type testSt struct{}
 type smritiTestSuite struct {
 	suite.Suite
 	assert         *assert.Assertions
-	smritiInstance *Smriti
+	smritiInstance *Smriti[testSt]
 }
 
 func (s *smritiTestSuite) SetupTest() {
@@ -27,29 +28,29 @@ func (s *smritiTestSuite) TearDownTest() {
 }
 
 func (s *smritiTestSuite) TestInvalidConfig() {
-	_, err := NewSmriti(0, 10, 0)
+	_, err := NewSmriti[testSt](0, 10, 0)
 	s.assert.NotNil(err)
 
-	_, err = NewSmriti(1024, 0, 0)
+	_, err = NewSmriti[testSt](1024, 0, 0)
 	s.assert.NotNil(err)
 
-	_, err = NewSmriti(-1024, 10, 0)
+	_, err = NewSmriti[testSt](-1024, 10, 0)
 	s.assert.NotNil(err)
 
-	_, err = NewSmriti(1024, -10, 0)
+	_, err = NewSmriti[testSt](1024, -10, 0)
 	s.assert.NotNil(err)
 }
 
 func (s *smritiTestSuite) TestInitialAllocations() {
 	var err error
-	s.smritiInstance, err = NewSmriti(10, 1, 0)
+	s.smritiInstance, err = NewSmriti[testSt](10, 1, 0)
 	s.assert.Nil(err)
 	s.assert.NotNil(s.smritiInstance)
 	s.assert.Equal(1, s.smritiInstance.currentAllocatedCount)
 	s.assert.Equal(1, s.smritiInstance.initialCount)
 	s.smritiInstance.Close()
 
-	s.smritiInstance, err = NewSmriti(10, 20, 0)
+	s.smritiInstance, err = NewSmriti[testSt](10, 20, 0)
 	s.assert.Nil(err)
 	s.assert.NotNil(s.smritiInstance)
 	s.assert.Equal(4, s.smritiInstance.currentAllocatedCount)
@@ -63,13 +64,13 @@ func (s *smritiTestSuite) TestInitialAllocations() {
 
 func (s *smritiTestSuite) TestExpansion() {
 	var err error
-	s.smritiInstance, err = NewSmriti(10, 10, 0)
+	s.smritiInstance, err = NewSmriti[testSt](10, 10, 0)
 	s.assert.Nil(err)
 	s.assert.NotNil(s.smritiInstance)
 	s.assert.Equal(2, s.smritiInstance.currentAllocatedCount)
 	s.assert.Equal(2, s.smritiInstance.initialCount)
 
-	var blocks map[int][]byte = make(map[int][]byte)
+	var blocks map[int]*Sanrachna[testSt] = make(map[int]*Sanrachna[testSt])
 	for i := range 5 {
 		block, err := s.smritiInstance.Allocate()
 		s.assert.Nil(err)
@@ -99,13 +100,13 @@ func (s *smritiTestSuite) TestExpansion() {
 
 func (s *smritiTestSuite) TestShrink() {
 	var err error
-	s.smritiInstance, err = NewSmriti(10, 10, 0)
+	s.smritiInstance, err = NewSmriti[testSt](10, 10, 0)
 	s.assert.Nil(err)
 	s.assert.NotNil(s.smritiInstance)
 	s.assert.Equal(2, s.smritiInstance.currentAllocatedCount)
 	s.assert.Equal(2, s.smritiInstance.initialCount)
 
-	var blocks map[int][]byte = make(map[int][]byte)
+	var blocks map[int]*Sanrachna[testSt] = make(map[int]*Sanrachna[testSt])
 	for i := range 5 {
 		block, err := s.smritiInstance.Allocate()
 		s.assert.Nil(err)
@@ -134,13 +135,13 @@ func (s *smritiTestSuite) TestShrink() {
 
 func (s *smritiTestSuite) TestAllocFailure() {
 	var err error
-	s.smritiInstance, err = NewSmriti(10, 10, 0)
+	s.smritiInstance, err = NewSmriti[testSt](10, 10, 0)
 	s.assert.Nil(err)
 	s.assert.NotNil(s.smritiInstance)
 	s.assert.Equal(2, s.smritiInstance.currentAllocatedCount)
 	s.assert.Equal(2, s.smritiInstance.initialCount)
 
-	var blocks map[int][]byte = make(map[int][]byte)
+	var blocks map[int]*Sanrachna[testSt] = make(map[int]*Sanrachna[testSt])
 	for i := range 10 {
 		block, err := s.smritiInstance.Allocate()
 		s.assert.Nil(err)
@@ -161,16 +162,27 @@ func (s *smritiTestSuite) TestAllocFailure() {
 
 func (s *smritiTestSuite) TestFakeFree() {
 	var err error
-	s.smritiInstance, err = NewSmriti(1, 2, 0)
+	s.smritiInstance, err = NewSmriti[testSt](1, 2, 0)
 	s.assert.Nil(err)
 	s.assert.NotNil(s.smritiInstance)
 
-	block := make([]byte, 1)
+	err = s.smritiInstance.Free(nil)
+	s.assert.NotNil(err)
+	s.assert.Contains(err.Error(), "cannot return a nil block")
+
+	block := &Sanrachna[testSt]{bytes: nil}
+	err = s.smritiInstance.Free(block)
+	s.assert.NotNil(err)
+	s.assert.Contains(err.Error(), "block size mismatch")
+
+	block = &Sanrachna[testSt]{}
+	block.bytes = make([]byte, 1)
 	err = s.smritiInstance.Free(block)
 	s.assert.NotNil(err)
 	s.assert.Contains(err.Error(), "attempted to return an unknown block")
 
-	block = make([]byte, 3)
+	block = &Sanrachna[testSt]{}
+	block.bytes = make([]byte, 3)
 	err = s.smritiInstance.Free(block)
 	s.assert.NotNil(err)
 	s.assert.Contains(err.Error(), "block size mismatch")
@@ -178,7 +190,7 @@ func (s *smritiTestSuite) TestFakeFree() {
 
 func (s *smritiTestSuite) TestStats() {
 	var err error
-	s.smritiInstance, err = NewSmriti(10, 20, 0)
+	s.smritiInstance, err = NewSmriti[testSt](10, 20, 0)
 	s.assert.Nil(err)
 	s.assert.NotNil(s.smritiInstance)
 	s.assert.Equal(4, s.smritiInstance.currentAllocatedCount)
@@ -209,7 +221,7 @@ func (s *smritiTestSuite) TestStats() {
 
 func (s *smritiTestSuite) TestSmritiReservation() {
 	var err error
-	s.smritiInstance, err = NewSmriti(1, 10, 20)
+	s.smritiInstance, err = NewSmriti[testSt](1, 10, 20)
 	s.assert.Nil(err)
 	s.assert.NotNil(s.smritiInstance)
 	s.assert.Equal(4, s.smritiInstance.currentAllocatedCount)

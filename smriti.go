@@ -7,17 +7,22 @@ import (
 	"unsafe"
 )
 
+type Sanrachna[T any] struct {
+	bytes []byte
+	data  T
+}
+
 // Smriti manages a pool of memory blocks using mmap.
-type Smriti struct {
+type Smriti[T any] struct {
 	blockSize             int // Size of each individual memory block
 	maxBlocks             int // Maximum number of blocks that can be allocated (maxMemorySize / blockSize)
 	initialCount          int // Number of blocks initially allocated (20% of maxBlocks)
 	reservedCount         int // Number of blocks reserved for high-priority allocations
 	currentAllocatedCount int // Number of blocks currently mmap'd and managed by the manager
 
-	available chan []byte // Channel to provide blocks to clients
-	reserved  chan []byte // Channel to provide blocks to clients
-	returned  chan []byte // Channel to receive blocks back from clients
+	available chan *Sanrachna[T] // Channel to provide blocks to clients
+	reserved  chan *Sanrachna[T] // Channel to provide blocks to clients
+	returned  chan *Sanrachna[T] // Channel to receive blocks back from clients
 
 	// reference stores all mmap'd blocks by their base address.
 	// This map is crucial for two reasons:
@@ -39,7 +44,7 @@ type Smriti struct {
 // NewSmriti creates and initializes a new Smriti.
 // It takes the desired block size and maximum total memory size.
 // It returns a pointer to the initialized Smriti or an error if initialization fails.
-func NewSmriti(blockSize, blockCount int, reservePercent int) (*Smriti, error) {
+func NewSmriti[T any](blockSize, blockCount int, reservePercent int) (*Smriti[T], error) {
 	if blockSize <= 0 || blockCount <= 0 {
 		return nil, fmt.Errorf("block size and block count must be non zero")
 	}
@@ -62,15 +67,15 @@ func NewSmriti(blockSize, blockCount int, reservePercent int) (*Smriti, error) {
 
 	// Channels are buffered with maxBlocks capacity to prevent deadlocks
 	// and allow for asynchronous operations without blocking.
-	sm := &Smriti{
+	sm := &Smriti[T]{
 		blockSize:             blockSize,
 		maxBlocks:             blockCount,
 		initialCount:          initialCount + reservedCount,
 		reservedCount:         reservedCount,
 		currentAllocatedCount: 0, // Will be updated during initial allocation
-		available:             make(chan []byte, blockCount),
-		reserved:              make(chan []byte, reservedCount),
-		returned:              make(chan []byte, blockCount),
+		available:             make(chan *Sanrachna[T], blockCount),
+		reserved:              make(chan *Sanrachna[T], reservedCount),
+		returned:              make(chan *Sanrachna[T], blockCount),
 		reference:             make(map[uintptr][]byte),
 		lastExpansonTime:      time.Now(),
 		done:                  make(chan struct{}),
@@ -110,7 +115,7 @@ func NewSmriti(blockSize, blockCount int, reservePercent int) (*Smriti, error) {
 
 // Close gracefully shuts down the Smriti, unmapping all allocated memory.
 // It signals background goroutines to stop and waits for them to finish.
-func (sm *Smriti) Close() {
+func (sm *Smriti[T]) Close() {
 	// Mark shutdown and close the returned block channel
 	sm.Lock()
 	close(sm.done)
@@ -155,7 +160,7 @@ func (sm *Smriti) Close() {
 }
 
 // Stats provides current statistics of the Smriti.
-func (sm *Smriti) Stats() (int, int, int) {
+func (sm *Smriti[T]) Stats() (int, int, int) {
 	sm.Lock()
 	defer sm.Unlock()
 
@@ -164,14 +169,14 @@ func (sm *Smriti) Stats() (int, int, int) {
 
 // GetBlock provides a memory block to the client.
 // It blocks until a block is available or a timeout occurs.
-func (sm *Smriti) Allocate() ([]byte, error) {
+func (sm *Smriti[T]) Allocate() (*Sanrachna[T], error) {
 	sm.Lock()
 	defer sm.Unlock()
 
 	return sm.getBlock()
 }
 
-func (sm *Smriti) AllocateReserved() ([]byte, error) {
+func (sm *Smriti[T]) AllocateReserved() (*Sanrachna[T], error) {
 	if sm.reservedCount == 0 {
 		return nil, fmt.Errorf("no reserved blocks configured")
 	}
@@ -190,9 +195,13 @@ func (sm *Smriti) AllocateReserved() ([]byte, error) {
 
 // PutBlock returns a memory block from the client to the manager.
 // It attempts to push the block back into the returned channel.
-func (sm *Smriti) Free(block []byte) error {
-	if len(block) != sm.blockSize {
-		return fmt.Errorf("block size mismatch: expected %d, got %d", sm.blockSize, len(block))
+func (sm *Smriti[T]) Free(block *Sanrachna[T]) error {
+	if block == nil {
+		return fmt.Errorf("cannot return a nil block")
+	}
+
+	if len(block.bytes) != sm.blockSize {
+		return fmt.Errorf("block size mismatch: expected %d, got %d", sm.blockSize, len(block.bytes))
 	}
 
 	sm.Lock()
@@ -202,7 +211,7 @@ func (sm *Smriti) Free(block []byte) error {
 }
 
 // Internal implementation of GetBlock without locking.
-func (sm *Smriti) getBlock() ([]byte, error) {
+func (sm *Smriti[T]) getBlock() (*Sanrachna[T], error) {
 	select {
 	case block := <-sm.available:
 		return block, nil
@@ -221,7 +230,7 @@ func (sm *Smriti) getBlock() ([]byte, error) {
 }
 
 // Internal implementation of GetBlockFromReserved without locking.
-func (sm *Smriti) getReservedBlock() ([]byte, error) {
+func (sm *Smriti[T]) getReservedBlock() (*Sanrachna[T], error) {
 	select {
 	case block := <-sm.reserved:
 		return block, nil
@@ -232,14 +241,14 @@ func (sm *Smriti) getReservedBlock() ([]byte, error) {
 }
 
 // Internal implementation of PutBlock without locking.
-func (sm *Smriti) putBlock(block []byte) error {
+func (sm *Smriti[T]) putBlock(block *Sanrachna[T]) error {
 	if block == nil {
 		return fmt.Errorf("cannot return a nil block")
 	}
 
 	// Verify that the block being returned is one that was managed by this manager.
 	// This prevents returning arbitrary memory or already deallocated blocks.
-	addr := uintptr(unsafe.Pointer(&block[0]))
+	addr := uintptr(unsafe.Pointer(&block.bytes[0]))
 	_, ok := sm.reference[addr]
 
 	if !ok {
@@ -262,7 +271,7 @@ func (sm *Smriti) putBlock(block []byte) error {
 
 // handlereturned is a background goroutine that processes blocks returned by clients.
 // It immediately pushes returned blocks back to the available channel, making them ready for reuse.
-func (sm *Smriti) handlereturned() {
+func (sm *Smriti[T]) handlereturned() {
 	defer sm.wg.Done()
 
 	for {
@@ -273,7 +282,7 @@ func (sm *Smriti) handlereturned() {
 			}
 
 			// Reset the block to avoid any corruption
-			copy(block, sm.zeroSlice)
+			copy(block.bytes, sm.zeroSlice)
 
 			if sm.reservedCount <= 0 {
 				sm.available <- block

@@ -10,20 +10,20 @@ type SmritiConfig struct {
 }
 
 // SmritiPatal manages multiple Smriti instances for different block sizes.
-type SmritiPatal struct {
-	configs []SmritiConfig  // Slice of configurations
-	smritis map[int]*Smriti // Map of block size to Smriti instances)
+type SmritiPatal[T any] struct {
+	configs []SmritiConfig     // Slice of configurations
+	smritis map[int]*Smriti[T] // Map of block size to Smriti instances)
 }
 
-func NewSmritiPatal(configs []SmritiConfig) (*SmritiPatal, error) {
+func NewSmritiPatal[T any](configs []SmritiConfig) (*SmritiPatal[T], error) {
 	if len(configs) == 0 {
 		return nil, fmt.Errorf("at least one configuration is required")
 	}
 
 	// Based on the config, create smirit instances for each size
-	sp := &SmritiPatal{
+	sp := &SmritiPatal[T]{
 		configs: configs,
-		smritis: make(map[int]*Smriti),
+		smritis: make(map[int]*Smriti[T]),
 	}
 
 	// Create Smriti instances for each configuration
@@ -32,7 +32,7 @@ func NewSmritiPatal(configs []SmritiConfig) (*SmritiPatal, error) {
 			return nil, fmt.Errorf("block size and block count must be non zero")
 		}
 
-		sm, err := NewSmriti(cfg.Size, cfg.Count, cfg.ReservePercent)
+		sm, err := NewSmriti[T](cfg.Size, cfg.Count, cfg.ReservePercent)
 		if err != nil {
 			return nil, err
 		}
@@ -44,7 +44,7 @@ func NewSmritiPatal(configs []SmritiConfig) (*SmritiPatal, error) {
 	return sp, nil
 }
 
-func (sp *SmritiPatal) Close() {
+func (sp *SmritiPatal[T]) Close() {
 	// Close all Smriti instances
 	for _, sm := range sp.smritis {
 		sm.Close()
@@ -52,19 +52,19 @@ func (sp *SmritiPatal) Close() {
 }
 
 // Allocate allocates a block of the specified size from the appropriate Smriti instance.
-func (sp *SmritiPatal) Allocate(blockSize int) ([]byte, error) {
+func (sp *SmritiPatal[T]) Allocate(blockSize int) (*Sanrachna[T], error) {
 	return sp.allocate(blockSize)
 }
 
 // AllocateWithUpgrade tries to allocate a block of the specified size.
-func (sp *SmritiPatal) AllocateWithUpgrade(blockSize int) ([]byte, error) {
+func (sp *SmritiPatal[T]) AllocateWithUpgrade(blockSize int) (*Sanrachna[T], error) {
 	blk, err := sp.allocate(blockSize)
 	if err == nil {
 		return blk, nil
 	}
 
 	// If allocation failed and upgrade is allowed, try larger sizes
-	for size, _ := range sp.smritis {
+	for size := range sp.smritis {
 		if size > blockSize {
 			return sp.AllocateWithUpgrade(size)
 		}
@@ -73,7 +73,7 @@ func (sp *SmritiPatal) AllocateWithUpgrade(blockSize int) ([]byte, error) {
 	return nil, fmt.Errorf("no suitable block found for size %d", blockSize)
 }
 
-func (sp *SmritiPatal) allocate(blockSize int) ([]byte, error) {
+func (sp *SmritiPatal[T]) allocate(blockSize int) (*Sanrachna[T], error) {
 	sm, exists := sp.smritis[blockSize]
 	if !exists {
 		// If nothing is possible then return error
@@ -84,12 +84,16 @@ func (sp *SmritiPatal) allocate(blockSize int) ([]byte, error) {
 }
 
 // Free returns a block to the appropriate Smriti instance based on its size.
-func (sp *SmritiPatal) Free(block []byte) error {
-	if len(block) == 0 {
+func (sp *SmritiPatal[T]) Free(block *Sanrachna[T]) error {
+	if block == nil {
+		return fmt.Errorf("cannot free a nil block")
+	}
+
+	if len(block.bytes) == 0 {
 		return fmt.Errorf("cannot free an empty block")
 	}
 
-	blockSize := cap(block)
+	blockSize := cap(block.bytes)
 	sm, exists := sp.smritis[blockSize]
 	if !exists {
 		return fmt.Errorf("no Smriti instance for block size %d", blockSize)
