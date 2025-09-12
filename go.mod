@@ -1,4 +1,4 @@
-module smriti
+module github.com/vibhansa-msft/smriti
 
 go 1.22.1
 
