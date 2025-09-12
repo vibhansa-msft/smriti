@@ -9,7 +9,7 @@ import (
 // allocateBlocks performs mmap for the specified number of new blocks.
 // It updates currentAllocatedCount and pushes the newly allocated blocks to the availableBlocks channel.
 // This function must be called with sm.mu locked to protect shared state.
-func (sm *Smriti) allocateBlocks(count int) (int, error) {
+func (sm *Smriti) allocateBlocks(count int, blockChannel chan []byte) (int, error) {
 	var i int = 0
 	for ; i < count; i++ {
 		// Use allocate for allocation.
@@ -27,7 +27,7 @@ func (sm *Smriti) allocateBlocks(count int) (int, error) {
 
 		// Push the newly allocated block to the availableBlocks channel.
 		select {
-		case sm.availableBlocks <- block:
+		case blockChannel <- block:
 			sm.currentAllocatedCount++
 		default:
 			// This case should ideally not be hit if availableBlocks capacity is maxBlockCount.
@@ -89,7 +89,7 @@ func (sm *Smriti) expand() (int, error) {
 
 	blocksToAllocate = min(blocksToAllocate, sm.maxBlockCount-sm.currentAllocatedCount)
 	sm.lastExpansonTime = time.Now()
-	return sm.allocateBlocks(blocksToAllocate)
+	return sm.allocateBlocks(blocksToAllocate, sm.availableBlocks)
 }
 
 // Shrink the blocks if more blocks can be deallocated

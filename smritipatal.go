@@ -4,8 +4,9 @@ import "fmt"
 
 // SmritiConfig defines the configuration for a Smriti instance.
 type SmritiConfig struct {
-	Size  int // Size of each block in bytes (or any unit)
-	Count int // Number of blocks of this size
+	Size           int // Size of each block in bytes (or any unit)
+	Count          int // Number of blocks of this size
+	ReservePercent int // Percentage of blocks to reserve for high-priority allocations
 }
 
 // SmritiPatal manages multiple Smriti instances for different block sizes.
@@ -31,7 +32,7 @@ func NewSmritiPatal(configs []SmritiConfig) (*SmritiPatal, error) {
 			return nil, fmt.Errorf("block size and block count must be non zero")
 		}
 
-		sm, err := NewSmriti(cfg.Size, cfg.Count)
+		sm, err := NewSmriti(cfg.Size, cfg.Count, cfg.ReservePercent)
 		if err != nil {
 			return nil, err
 		}
@@ -52,12 +53,12 @@ func (sp *SmritiPatal) Close() {
 
 // Allocate allocates a block of the specified size from the appropriate Smriti instance.
 func (sp *SmritiPatal) Allocate(blockSize int) ([]byte, error) {
-	return sp.allocateInternal(blockSize)
+	return sp.allocate(blockSize)
 }
 
 // AllocateWithUpgrade tries to allocate a block of the specified size.
 func (sp *SmritiPatal) AllocateWithUpgrade(blockSize int) ([]byte, error) {
-	blk, err := sp.allocateInternal(blockSize)
+	blk, err := sp.allocate(blockSize)
 	if err == nil {
 		return blk, nil
 	}
@@ -72,7 +73,7 @@ func (sp *SmritiPatal) AllocateWithUpgrade(blockSize int) ([]byte, error) {
 	return nil, fmt.Errorf("no suitable block found for size %d", blockSize)
 }
 
-func (sp *SmritiPatal) allocateInternal(blockSize int) ([]byte, error) {
+func (sp *SmritiPatal) allocate(blockSize int) ([]byte, error) {
 	sm, exists := sp.smritis[blockSize]
 	if !exists {
 		// If nothing is possible then return error

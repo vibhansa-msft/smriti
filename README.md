@@ -33,4 +33,12 @@ A time.Timer is used to detect prolonged periods of inactivity, triggering the s
 
 The Close() method ensures all background goroutines are stopped and all mmap'd memory is properly munmap'd to prevent memory leaks.
 
+#### Reserved pool:
+
+Smriti also support creation of a reserved pool. While creating the new instance you can define the reserved pool percentage and use AllocateReserved() api to get a buffer from this pool. This pool will be deallocated only on Close(). User can set any number between 0 to 49 as reserved pool percentage where 0 means no reserved pool required.
+
+#### Multiple Smriti instance with SmritiPatal
+
+Use SmritiPatal if you wish to create a pool of blocks with different sizes.
+
 GC Avoidance: By storing the []byte slices returned by mmap in the allMappedBlocks map (keyed by their underlying memory address), the Go runtime maintains a reference to these slices, preventing their headers from being garbage collected while the mmap'd memory is still active. This allows explicit munmap calls when blocks are deallocated.

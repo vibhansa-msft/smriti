@@ -28,7 +28,7 @@ func allocate(size int) ([]byte, error) {
 // munmap unmaps a previously mmap'd region of memory.
 // It takes the []byte slice that was returned by mmap.
 func free(data []byte) error {
-	if data == nil || len(data) == 0 {
+	if len(data) == 0 {
 		return syscall.EINVAL // Invalid argument error
 	}
 

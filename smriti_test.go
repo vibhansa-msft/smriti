@@ -27,29 +27,29 @@ func (s *smritiTestSuite) TearDownTest() {
 }
 
 func (s *smritiTestSuite) TestInvalidConfig() {
-	_, err := NewSmriti(0, 10)
+	_, err := NewSmriti(0, 10, 0)
 	s.assert.NotNil(err)
 
-	_, err = NewSmriti(1024, 0)
+	_, err = NewSmriti(1024, 0, 0)
 	s.assert.NotNil(err)
 
-	_, err = NewSmriti(-1024, 10)
+	_, err = NewSmriti(-1024, 10, 0)
 	s.assert.NotNil(err)
 
-	_, err = NewSmriti(1024, -10)
+	_, err = NewSmriti(1024, -10, 0)
 	s.assert.NotNil(err)
 }
 
 func (s *smritiTestSuite) TestInitialAllocations() {
 	var err error
-	s.smritiInstance, err = NewSmriti(10, 1)
+	s.smritiInstance, err = NewSmriti(10, 1, 0)
 	s.assert.Nil(err)
 	s.assert.NotNil(s.smritiInstance)
 	s.assert.Equal(1, s.smritiInstance.currentAllocatedCount)
 	s.assert.Equal(1, s.smritiInstance.initialBlockCount)
 	s.smritiInstance.Close()
 
-	s.smritiInstance, err = NewSmriti(10, 20)
+	s.smritiInstance, err = NewSmriti(10, 20, 0)
 	s.assert.Nil(err)
 	s.assert.NotNil(s.smritiInstance)
 	s.assert.Equal(4, s.smritiInstance.currentAllocatedCount)
@@ -63,7 +63,7 @@ func (s *smritiTestSuite) TestInitialAllocations() {
 
 func (s *smritiTestSuite) TestExpansion() {
 	var err error
-	s.smritiInstance, err = NewSmriti(10, 10)
+	s.smritiInstance, err = NewSmriti(10, 10, 0)
 	s.assert.Nil(err)
 	s.assert.NotNil(s.smritiInstance)
 	s.assert.Equal(2, s.smritiInstance.currentAllocatedCount)
@@ -99,7 +99,7 @@ func (s *smritiTestSuite) TestExpansion() {
 
 func (s *smritiTestSuite) TestShrink() {
 	var err error
-	s.smritiInstance, err = NewSmriti(10, 10)
+	s.smritiInstance, err = NewSmriti(10, 10, 0)
 	s.assert.Nil(err)
 	s.assert.NotNil(s.smritiInstance)
 	s.assert.Equal(2, s.smritiInstance.currentAllocatedCount)
@@ -134,7 +134,7 @@ func (s *smritiTestSuite) TestShrink() {
 
 func (s *smritiTestSuite) TestAllocFailure() {
 	var err error
-	s.smritiInstance, err = NewSmriti(10, 10)
+	s.smritiInstance, err = NewSmriti(10, 10, 0)
 	s.assert.Nil(err)
 	s.assert.NotNil(s.smritiInstance)
 	s.assert.Equal(2, s.smritiInstance.currentAllocatedCount)
@@ -161,7 +161,7 @@ func (s *smritiTestSuite) TestAllocFailure() {
 
 func (s *smritiTestSuite) TestFakeFree() {
 	var err error
-	s.smritiInstance, err = NewSmriti(1, 2)
+	s.smritiInstance, err = NewSmriti(1, 2, 0)
 	s.assert.Nil(err)
 	s.assert.NotNil(s.smritiInstance)
 
@@ -178,7 +178,7 @@ func (s *smritiTestSuite) TestFakeFree() {
 
 func (s *smritiTestSuite) TestStats() {
 	var err error
-	s.smritiInstance, err = NewSmriti(10, 20)
+	s.smritiInstance, err = NewSmriti(10, 20, 0)
 	s.assert.Nil(err)
 	s.assert.NotNil(s.smritiInstance)
 	s.assert.Equal(4, s.smritiInstance.currentAllocatedCount)
